@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+set -ue
+
+threads=1
+name2col="1"
+
+while getopts ":t:n:" opt; do
+    case ${opt} in 
+        t)
+          threads="$OPTARG"
+          ;;
+        n)
+          name2col="$OPTARG"
+          ;;
+        \?)
+          echo "Invalid option: -$OPTARG" >&2
+          ;;
+    esac
+done  
+
+shift $((OPTIND-1))
+
+
+if [ $# -ne 4 ]; then 
+    echo "./align_reads_with_lz [options] lastz reference.fa reads.fq tmpdir"
+    echo "options are -t to specify number of threads"
+    echo "            -n to specify the index of the name2 column in alignments"
+    exit 1
+fi
+
+lastz="$1"
+reference="$2"
+reads="$3"
+tmpdir="$4"
+
+sd=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+seq 1 ${threads} | xargs -P ${threads} -Ixxx ${sd}/align.sh xxx ${lastz} ${reference} ${reads} ${sd} ${threads} ${tmpdir}
+
+${sd}/combine_alignments -c @ ${name2col} ${threads} ${reads} ${tmpdir}

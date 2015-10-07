@@ -1,0 +1,69 @@
+#!/usr/bin/env python
+
+"""
+    usage:
+        find_best_split [options] reference.fa < alignments.sam
+
+    where the options are:
+        -h,--help         : print usage and quit
+        -d,--debug        : print debug information
+        -s,--significant  : only output alignments where the best possible split
+                            is better than the second best by at least this 
+                            score [10]
+        -c,--coverage     : require at least this % of the sequence to be 
+                            aligned [50]                       
+        -m,--maxalignments: ignore the sequence if more than this number of 
+                            qualified alignments are found [2000]
+        -i,--ignoreq      : ignore the mapping qualities from the aligner
+"""
+
+from sys import argv, stderr, stdin, exit, stdout
+from getopt import getopt, GetoptError
+
+from find_best_split import *
+
+__author__ = "Aakrosh Ratan"
+__email__  = "ratan@bx.psu.edu"
+
+# do we want the debug information to be printed?
+debug_flag = False
+
+if __name__ == "__main__":
+    try:
+        opts, args = getopt(argv[1:], "hds:c:m:i",["help", "debug", "significant=", "coverage=", "maxalignments=", "ignoreq"])
+    except GetoptError, err:
+        print str(err)
+        print >> stderr, __doc__
+        exit(2) 
+
+    significant = 10
+    coverage    = 50
+    maxalignments = 2000
+    ignoreq  = False
+
+    for o, a in opts:
+        if o in ("-h", "--help"):
+            print >> stderr, __doc__
+            exit()
+        elif o in ("-d", "--debug"):
+            debug_flag = True
+        elif o in ("-s", "--significant"):
+            significant = int(a)
+        elif o in ("-c", "--coverage"):
+            coverage = int(a)
+        elif o in ("-m", "--maxalignments"):
+            maxalignments = int(a)
+        elif o in ("-i", "--ignoreq"):
+            ignoreq = True
+        else:
+            assert False, "unhandled option"
+
+    if len(args) != 1:
+        print >> stderr, __doc__
+        exit(3)
+
+    assert coverage < 100
+
+    if ignoreq: MQTHRESHOLD = 0
+
+    FindBestSplitFromAlignments(args[0], significant, coverage, maxalignments)

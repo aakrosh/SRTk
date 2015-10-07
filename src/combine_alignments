@@ -1,0 +1,55 @@
+#!/usr/bin/env python
+
+"""
+    usage:
+        combine_alignments [options] name2col numthreads reads.fq
+
+    where the options are:
+        -h,--help : print usage and quit
+        -d,--debug: print debug information
+        -c,--comment: lines in alignment files beginning with this character
+                      are treated as comments    
+
+    Combine several alignment files produced by LASTZ as a result of running
+    align_reads_with_lz script. This assumes (and does not check for) that 
+    all alignment files have the same format (which is accurate if this is
+    processing the output of align_reads_with_lz).
+"""
+
+from sys import argv, stderr, stdin, exit, stdout
+from getopt import getopt, GetoptError
+
+from combine_alignments import *
+
+__author__ = "Aakrosh Ratan"
+__email__  = "ratan@bx.psu.edu"
+
+# do we want the debug information to be printed?
+debug_flag = False
+
+if __name__ == "__main__":
+    try:
+        opts, args = getopt(argv[1:], "hdc:",["help", "debug", "comment="])
+    except GetoptError, err:
+        print str(err)
+        print >> stderr, __doc__
+        exit(2) 
+
+    comment = "#"
+
+    for o, a in opts:
+        if o in ("-h", "--help"):
+            print >> stderr, __doc__
+            exit()
+        elif o in ("-d", "--debug"):
+            debug_flag = True
+        elif o in ("-c", "--comment"):
+            comment = a
+        else:
+            assert False, "unhandled option"
+
+    if len(args) != 4:
+        print >> stderr, __doc__
+        exit(3)
+
+    Combine(int(args[0]), int(args[1]), args[2], args[3], comment)
