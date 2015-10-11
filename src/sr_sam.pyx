@@ -68,11 +68,12 @@ def PrintFastqSequence(alignment, fqfile):
     quality = alignment.query_qualities
     if alignment.is_reverse:
         quality = quality[::-1]
+    quality = [chr(x+33) for x in quality]
 
     print >> fqfile, qname
     print >> fqfile, sequence
     print >> fqfile, "+"
-    print >> fqfile, quality
+    print >> fqfile, "".join(quality)
 
 def AddSplitReadsToFq(split_name, working_directory):
     bamfile = pysam.AlignmentFile(split_name, "rb")
