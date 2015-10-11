@@ -70,7 +70,7 @@ def PrintFastqSequence(alignment, fqfile):
         quality = quality[::-1]
     quality = [chr(x+33) for x in quality]
 
-    print >> fqfile, qname
+    print >> fqfile, "@%s" % qname
     print >> fqfile, sequence
     print >> fqfile, "+"
     print >> fqfile, "".join(quality)
