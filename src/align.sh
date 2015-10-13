@@ -7,6 +7,7 @@ reads=$4
 sd=$5
 threads=$6
 tmpdir=$7
+maxsplits=$8
 
 lzscores="--match=1,1 --gap=3,1"
 lzparams="--ambiguous=iupac --seed=match11 --xdrop=2 --hspthresh=20 --ydrop=5"
@@ -17,5 +18,5 @@ lzflt="--limitperquery=2011"
   ${reference}[unmask,multi] \
   ${reads}[nameparse=full,subsample=${indx}/${threads}] \
   ${lzscores} ${lzparams} ${lzfmt} ${lzflt} \
-| ${sd}/find_best_split -s 1 -i ${reference} \
+| ${sd}/find_best_split -s 1 -i -x ${maxsplits} ${reference} \
 > ${tmpdir}/alignments.${indx}.lz

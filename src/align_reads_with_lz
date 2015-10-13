@@ -4,14 +4,18 @@ set -ue
 
 threads=1
 name2col="1"
+maxsplits="2"
 
-while getopts ":t:n:" opt; do
+while getopts ":t:n:m:" opt; do
     case ${opt} in 
         t)
           threads="$OPTARG"
           ;;
         n)
           name2col="$OPTARG"
+          ;;
+        m) 
+          maxsplits="$OPTARG"
           ;;
         \?)
           echo "Invalid option: -$OPTARG" >&2
@@ -36,6 +40,6 @@ tmpdir="$4"
 
 sd=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 
-seq 1 ${threads} | xargs -P ${threads} -Ixxx ${sd}/align.sh xxx ${lastz} ${reference} ${reads} ${sd} ${threads} ${tmpdir}
+seq 1 ${threads} | xargs -P ${threads} -Ixxx ${sd}/align.sh xxx ${lastz} ${reference} ${reads} ${sd} ${threads} ${tmpdir} ${maxsplits}
 
 ${sd}/combine_alignments -c @ ${name2col} ${threads} ${reads} ${tmpdir}

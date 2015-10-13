@@ -9,7 +9,7 @@ all:
 	make test n=split o=--
 
 test:
-	./../bin/sr_sam  -t 2 -1 reference/reference.fa inputs/${n}.${o}.fq.gz \
+	./../bin/sr_sam -t 2 -1 reference/reference.fa inputs/${n}.${o}.fq.gz \
 	> tmp.sam
 	diff tmp.sam outputs/${n}.${o}.sam
 	rm tmp.sam

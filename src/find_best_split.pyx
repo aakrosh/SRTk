@@ -483,7 +483,7 @@ def BothEndsMap(alignments):
 
     return lmapped & rmapped 
     
-def ProcessAlignments(alignments, infile, outfile, significant, coverage, maxalignments):
+def ProcessAlignments(alignments, infile, outfile, significant, coverage, maxalignments, maxsplits):
     '''Process alignments for this query.
     '''
     start_time = clock()
@@ -509,13 +509,13 @@ def ProcessAlignments(alignments, infile, outfile, significant, coverage, maxali
             # we have at least two alignments. So lets pick ones that best covers
             # the query as per the algorithm.
             best_alignments = FindBestSplit(infile, alignments, significant)
-            if best_alignments != None and \
-               len(best_alignments) > 0:
-                if len(best_alignments) == 1:
+            if best_alignments != None and len(best_alignments) > 0:
+                if maxsplits >= 1 and len(best_alignments) == 1:
                     PrintSamOutput(best_alignments[::-1], outfile)
                 elif len(best_alignments) >= 2 and \
                      Coverage(best_alignments) > coverage and \
-                     BothEndsMap(best_alignments):
+                     BothEndsMap(best_alignments) and \
+                     len(best_alignments) <= maxsplits:
                     PrintSamOutput(best_alignments[::-1], outfile)
 
     end_time = clock()
@@ -523,7 +523,7 @@ def ProcessAlignments(alignments, infile, outfile, significant, coverage, maxali
         print >> stderr, "Processing %s took %0.3f sec" \
            % (alignments[0].query_name, end_time - start_time)
 
-def FindBestSplitFromAlignments(faname, significant, coverage, maxalignments):
+def FindBestSplitFromAlignments(faname, significant, coverage, maxalignments, maxsplits):
     query_name = None
     alignments = []
 
@@ -550,12 +550,12 @@ def FindBestSplitFromAlignments(faname, significant, coverage, maxalignments):
         elif aln.query_name == query_name:
             alignments.append(aln)
         else:
-            ProcessAlignments(alignments, infile, outfile, significant, coverage, maxalignments)
+            ProcessAlignments(alignments, infile, outfile, significant, coverage, maxalignments, maxsplits)
             query_name = aln.query_name
             alignments = [aln]
 
     if query_name != None:
-        ProcessAlignments(alignments, infile, outfile, significant, coverage, maxalignments)
+        ProcessAlignments(alignments, infile, outfile, significant, coverage, maxalignments, maxsplits)
 
     reference.close()
     stdout.flush() # to get rid of warn "close failed in file object destructor:"

@@ -100,11 +100,12 @@ def RunCommand(command):
         print >> stderr, "Execution of %s failed: %s", (command,e)
         exit(6)
 
-def AlignReadsUsingLASTZ(cwd, lastz, threads, ref_name):
+def AlignReadsUsingLASTZ(cwd, lastz, threads, ref_name, maxsplits):
     DIR = path.dirname(path.realpath(__file__))
 
     command = ["%s/align_reads_with_lz" % DIR,
                "-t", str(threads),
+               "-m", str(maxsplits),
                lastz,
                ref_name,
                "%s/reads.fq" % cwd,
@@ -213,7 +214,7 @@ def FindSplitAlignments(maxsplits, coverage, lastz, threads, onlylz, ref_name, u
         threads = 1        
 
     # now use LASTZ to align the sequences in the input fq 
-    AlignReadsUsingLASTZ(working_directory, lastz, threads, ref_name)
+    AlignReadsUsingLASTZ(working_directory, lastz, threads, ref_name, maxsplits)
 
     # clear the temporary working area
     rmtree(working_directory)
