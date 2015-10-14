@@ -86,41 +86,69 @@ class Alignment:
         refseq = reference.fetch(self.reference_name, 
                                  alignment.reference_start,
                                  alignment.reference_end)
-        offset = self.reference_start 
-        qlast  = None
+
+        qi = self.query_start - 1
+        fseg = True
         for q,r in alignment.get_aligned_pairs():
-            if q == None:
-                x = qlast
-            else:
-                qlast = q
-                x = q
-
-            if alignment.is_reverse:
-                pq = self.query_length - x - 1
-            else:
-                pq = x
-
-            if pq != None and (pq < self.query_start or pq >= self.query_end): 
-                continue
-
-            assert pq >= self.query_start and \
-                   pq < self.query_end, "%d : %d : %d" \
-                % (pq, self.query_start, self.query_end)
-            self.pairs.append((q,r))
-            rbase = "-" if r == None else refseq[r - offset].upper()
-            qbase = "-" if q == None else self.query_sequence[q].upper()
-
-            if alignment.is_reverse:q = pq
-    
-            if rbase == "-" and qbase != "-":
-                self.rgaps[q] = 1
-            elif rbase != "-" and qbase == "-":
-                self.qgaps[qlast+1] += 1
-            elif rbase != "-" and qbase != "-":
-                if rbase == 'N' or qbase == 'N' or rbase == qbase:
-                    self.matches[q] = 1
+            if fseg == True:
+                if r == None:
+                    continue
                 else:
-                    self.mismatches[q] = 1
+                    fseg = False
+            if qi == (self.query_end - 1): break
+
+            self.pairs.append((q,r))
+            qbase = "-" if q == None else self.query_sequence[q].upper()
+            rbase = "-" if r == None else refseq[r - self.reference_start].upper()
+            
+            if   rbase == "-" and qbase != "-":
+                qi += 1
+                self.rgaps[qi] = 1
+            elif rbase != "-" and qbase == "-":
+                self.qgaps[qi] += 1
+            elif rbase != "-" and qbase != "-":
+                qi += 1
+                if rbase == 'N' or qbase == 'N' or rbase == qbase:
+                    self.matches[qi] = 1
+                else:
+                    self.mismatches[qi] = 1
+            
+    
+        #offset = self.reference_start 
+        #qlast  = None
+        #for q,r in alignment.get_aligned_pairs():
+        #    if q == None:
+        #        x = qlast
+        #    else:
+        #        qlast = q
+        #        x = q
+
+        #    if alignment.is_reverse:
+        #        pq = self.query_length - x - 1
+        #    else:
+        #        pq = x
+
+        #    if pq != None and (pq < self.query_start or pq >= self.query_end): 
+        #        continue
+
+        #    assert pq >= self.query_start and \
+        #           pq < self.query_end, "%d : %d : %d" \
+        #        % (pq, self.query_start, self.query_end)
+        #    self.pairs.append((q,r))
+        #    rbase = "-" if r == None else refseq[r - offset].upper()
+        #    qbase = "-" if q == None else self.query_sequence[q].upper()
+
+        #    if alignment.is_reverse:q = pq
+    
+        #    if rbase == "-" and qbase != "-":
+        #        self.rgaps[q] = 1
+        #    elif rbase != "-" and qbase == "-":
+        #        self.qgaps[qlast+1] += 1
+        #    elif rbase != "-" and qbase != "-":
+        #        if rbase == 'N' or qbase == 'N' or rbase == qbase:
+        #            self.matches[q] = 1
+        #        else:
+        #            self.mismatches[q] = 1
 
 
     def __str__(self):
@@ -523,7 +551,9 @@ def ProcessAlignments(alignments, infile, outfile, significant, coverage, maxali
         print >> stderr, "Processing %s took %0.3f sec" \
            % (alignments[0].query_name, end_time - start_time)
 
-def FindBestSplitFromAlignments(faname, significant, coverage, maxalignments, maxsplits):
+def FindBestSplitFromAlignments(faname, significant, coverage, maxalignments, maxsplits, d_flag):
+    debug_flag = d_flag
+
     query_name = None
     alignments = []
 

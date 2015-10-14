@@ -70,4 +70,4 @@ if __name__ == "__main__":
 
     if ignoreq: MQTHRESHOLD = 0
 
-    FindBestSplitFromAlignments(args[0], significant, coverage, maxalignments, maxsplits)
+    FindBestSplitFromAlignments(args[0], significant, coverage, maxalignments, maxsplits, debug_flag)
