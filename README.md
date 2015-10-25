@@ -1,7 +1,9 @@
 # SRTk
 
 ## SUMMARY
-SRTk is a collection of scripts to find the split-read alignments of sequences.
+SRTk is a collection of scripts to find the split-read alignments of sequences
+using an inexact algorithm. SRTk is under active development and we hope to
+release it as part of a larger package in upcoming months.
 
 ## REQUIREMENTS
 STRBait should work on any standard 64 bit Linux environment with 

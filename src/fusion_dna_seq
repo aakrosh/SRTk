@@ -1,0 +1,456 @@
+#!/usr/bin/env python
+
+"""
+    usage:
+      fusion_dna_seq [options] annotation.gff3 svs.vcf
+
+    where the options are:
+        -h,--help : print usage and quit
+        -d,--debug: print debug information
+
+    Example:
+    21      39876344        39876363        21      42858014        42858033
+    INVERSION
+    
+    should show up as a TMPRSS2-ERG fusion
+"""
+
+from sys import argv, stderr, stdin, exit, stdout
+from getopt import getopt, GetoptError
+from itertools import product
+
+import re
+
+from intervaltree import IntervalTree
+
+__author__ = "Aakrosh Ratan"
+__email__  = "ratan@bx.psu.edu"
+
+# do we want the debug information to be printed?
+debug_flag = False
+
+class SV:
+    pass
+
+class Gene:
+    pass
+
+class Transcript:
+    pass
+
+class Exon:
+    pass
+
+def ReadGFF(filename):
+    genes = {}
+    transcripts = {}
+    exons = {}
+
+    with open(filename, "r") as f:
+        for line in f:
+            if line.startswith("#"): continue
+            tokens = line.strip().split("\t")
+
+            chrom = tokens[0]
+            start = int(tokens[3]) - 1
+            end   = int(tokens[4])
+            strand= tokens[6]
+            assert strand in ["+","-"], strand
+
+            if tokens[2] == "gene":
+                # this is a new gene
+                gene = Gene()
+                gene.chrom  = chrom
+                gene.zstart = start
+                gene.end    = end
+                gene.strand = strand
+                _x,gene.id     = tokens[8].split(";")[0].split("=")
+                assert _x == "ID"
+                _x,gene.type   = tokens[8].split(";")[3].split("=")
+                assert _x == "gene_type"
+                _x,gene.status = tokens[8].split(";")[4].split("=")
+                assert _x == "gene_status"
+                _x,gene.name   = tokens[8].split(";")[5].split("=")
+                assert _x == "gene_name"
+    
+                if chrom not in genes:
+                    genes[chrom] = IntervalTree()
+
+                genes[chrom][start:end] = gene
+                assert gene.id not in transcripts, gene.id
+                transcripts[gene.id] = []
+    
+            elif tokens[2] == "transcript":
+                transcript = Transcript()
+                transcript.chrom  = chrom
+                transcript.zstart = start
+                transcript.end    = end
+                transcript.strand = strand
+                _x,transcript.id     = tokens[8].split(";")[0].split("=")
+                assert _x == "ID"
+                _x,transcript.gene   = tokens[8].split(";")[2].split("=")
+                assert _x == "gene_id"
+                _x,transcript.type   = tokens[8].split(";")[7].split("=")
+                assert _x == "transcript_type"
+
+                assert transcript.gene in transcripts, transcript.gene
+                transcripts[transcript.gene].append(transcript)
+                assert transcript.id not in exons, transcript.id
+                exons[transcript.id] = []      
+
+            elif tokens[2] == "exon":
+                # this gene should already be in the db
+                exon = Exon()
+                exon.chrom  = chrom
+                exon.zstart = start
+                exon.end    = end
+                exon.strand = strand
+                _x,exon.id     = tokens[8].split(";")[0].split("=")
+                assert _x == "ID"
+                _x,exon.number = tokens[8].split(";")[10].split("=")
+                assert _x == "exon_number"             
+
+                gene_id = tokens[8].split(";")[2].split("=")[1]
+                assert gene_id in transcripts, gene_id
+                transcript_id = tokens[8].split(";")[3].split("=")[1]
+                assert transcript_id in exons, transcript_id
+                exons[transcript_id].append(exon)
+            else:
+                continue
+
+    return genes,transcripts,exons
+
+def NextSV(f):
+    for line in f:
+        if line.startswith("#"): continue
+        tokens = line.strip().split("\t")
+
+        var = SV()
+        var.chrom = tokens[0]
+        var.pos   = int(tokens[1])
+        var.id    = tokens[2]
+        var.ref   = tokens[3]
+        var.alt   = tokens[4]
+        var.qual  = tokens[5]
+        var.filter= tokens[6]
+        var.info = {}
+        for token in tokens[7].split(";"):
+            try:
+                x,y = token.split("=")
+            except ValueError:
+                x = token
+                y = "1"
+            var.info[x] = y
+
+        x,y = var.info['CIPOS'].split(",")
+        x   = int(x)
+        y   = int(y)
+        var.left = (var.chrom,var.pos+x-1,var.pos+y)
+
+        x,y = var.info['CIEND'].split(",")
+        x   = int(x)
+        y   = int(y)
+
+        if var.info['SVTYPE'] == 'BND':
+            _,coord,_ = re.split(r'[\[,\]]', var.alt)
+            chrom,pos = coord.split(":")
+            pos = int(pos)
+            var.right = (chrom,pos+x-1,pos+y) 
+        else:
+            end = int(var.info['END'])
+            var.right = (var.chrom,end+x-1,end+y) 
+
+        yield var
+
+def PrintSV(v):
+    output = []
+    output.append(v.chrom)
+    output.append(str(v.pos))
+    output.append(v.id)
+    output.append(v.ref)
+    output.append(v.alt)
+    output.append(v.filter)
+    output.append(";".join(["%s=%s" % (x,y) for x,y in v.info.items()]))
+    print "\t".join(output)
+
+def Intersections(interval, features):
+    intersects = []
+
+    chromfeatures = features.get(interval[0], [])
+        
+    for x in chromfeatures[interval[1]:interval[2]]:
+        intersects.append(x.data)
+
+    return intersects
+
+def Intersects(g1, g2):
+    c1,s1,e1 = g1.chrom,g1.zstart,g1.end
+    c2,s2,e2 = g2.chrom,g2.zstart,g2.end
+    assert s1 < e1
+    assert s2 < e2
+
+    if c1 != c2: return False
+    if e2 < s1: return False
+    if s2 > e1: return False
+    return True
+
+def ExonsToLeft(interval, transcripts, exons):
+    '''Return list of exons intersecting or to the left of this interval
+    '''
+    pos = interval[1]
+    left = []
+
+    for transcript in transcripts:
+        # only consider transcripts that overlap
+        if interval[0] != transcript.chrom: continue
+        if transcript.end < pos: continue
+        if transcript.zstart > interval[2]: continue
+        if transcript.type != "protein_coding": continue
+
+        texons = [transcript.id]
+        for exon in exons[transcript.id]:
+            if (exon.zstart <= pos and exon.end >= pos) or exon.end < pos:
+                texons.append(exon)
+                
+        if len(texons) > 1: left.append(texons)
+
+    return left
+
+def ExonsToRight(interval, transcripts, exons):
+    '''Return list of exons intersecting or to the right of this interval
+    '''
+    pos = interval[2]
+    right = []
+
+    for transcript in transcripts:
+        # only consider transcripts that overlap (DHRSX is an example of gene
+        # that might cause confusion otherwise
+        if interval[0] != transcript.chrom: continue
+        if transcript.end < pos: continue
+        if transcript.zstart > interval[2]: continue
+        if transcript.type != "protein_coding": continue
+
+        texons = [transcript.id]
+        for exon in exons[transcript.id]:
+            if (exon.zstart <= pos and exon.end >= pos) or exon.zstart > pos:
+                texons.append(exon)    
+        
+        if len(texons) > 1: right.append(texons)
+    
+    return right
+
+def AnnotateVariant(variant,g1,g2,e1,e2):
+    # Pick the largest of the transcripts from e1 and e2 for reporting purposes
+    f = []
+    for e in e1:
+        if len(e) > len(f): f = e
+
+    s = []
+    for e in e2:
+        if len(e) > len(s): s = e
+
+    variant.fs.append(f[0]+":"+",".join([x.number for x in f[1:]]))
+    variant.ss.append(s[0]+":"+",".join([x.number for x in s[1:]]))
+
+def main(gffName, vcfName):
+    # read the genes from the GFF file
+    genes,transcripts,exons = ReadGFF(gffName)
+    print >> stderr, "Read the genes from the GFF file" 
+
+    potential_fusions = {}
+
+    # now read a structural variant and see if it could result in a gene fusion
+    with open(vcfName, "r") as f:
+        for variant in NextSV(f):    
+            gene1s = Intersections(variant.left, genes)
+            gene2s = Intersections(variant.right, genes)
+            variant.fs = []
+            variant.ss = []
+            variant.ps = []
+
+            if len(gene1s) > 0 and len(gene2s) > 0:
+                for g1,g2 in product(gene1s,gene2s):
+                    ispotential = False
+
+                    # These two cases are assumed to not be interesting
+                    # 1. The two breakpoints are on the same gene.
+                    # 2. The two breakpoints are on genes that overlap
+                    if g1.id != g2.id and \
+                       g1.type == "protein_coding" and \
+                       g2.type == "protein_coding" and \
+                       Intersects(g1, g2) == False:
+                        if variant.info['SVTYPE'] == 'DEL':
+                            e1=ExonsToLeft(variant.left,transcripts[g1.id],exons)
+                            e2=ExonsToRight(variant.right,transcripts[g2.id],exons)
+                            if len(e1) > 0 and len(e2) > 0 and \
+                               g1.strand == g2.strand:
+                                AnnotateVariant(variant,g1,g2,e1,e2)
+                                ispotential = True
+
+                                f = variant.fs[-1]
+                                s = variant.ss[-1]
+
+                                if g1.strand == "+":
+                                    indxs = f.split(":")[1].split(",")
+                                    assert "1" in indxs
+                                    variant.ps.append(f.split(":")[0] \
+                                                    + ":" \
+                                                    + s.split(":")[0])
+                                else:
+                                    indxs = s.split(":")[1].split(",")
+                                    assert "1" in indxs
+                                    variant.ps.append(s.split(":")[0] \
+                                                    + ":" \
+                                                    + f.split(":")[0])
+ 
+                        elif variant.info['SVTYPE'] == 'INV':
+                            raise NotImplementedError()
+                        elif variant.info['SVTYPE'] == 'INS':
+                            raise NotImplementedError()
+                        elif variant.info['SVTYPE'] == 'CNV': 
+                            raise NotImplementedError()
+                        elif variant.info['SVTYPE'] == 'DUP:TANDEM': 
+                            raise NotImplementedError()
+                        elif variant.info['SVTYPE'] == 'DUP': 
+                            # as far as I understand LUMPY this refers to tandem
+                            # duplications of just one kind. I need to revisit
+                            # this at some point
+                            # print >> stderr, "here",g1.name,g2.name
+                            # print >> stderr, "\t",g1.chrom,g1.zstart,g1.end
+                            # print >> stderr, "\t",g2.chrom,g2.zstart,g2.end
+                            e1=ExonsToRight(variant.left,transcripts[g1.id],exons)
+                            e2=ExonsToLeft(variant.right,transcripts[g2.id],exons)
+                            if len(e1) > 0 and len(e2) > 0 and \
+                                g1.strand == g2.strand:
+                                AnnotateVariant(variant,g1,g2,e1,e2)
+                                ispotential = True
+
+                                f = variant.fs[-1]
+                                s = variant.ss[-1]
+
+                                if g1.strand == "+":
+                                    indxs = s.split(":")[1].split(",")
+                                    assert "1" in indxs
+                                    variant.ps.append(s.split(":")[0] \
+                                                    + ":" \
+                                                    + f.split(":")[0])
+                                else:
+                                    indxs = f.split(":")[1].split(",")
+                                    assert "1" in indxs
+                                    variant.ps.append(f.split(":")[0] \
+                                                    + ":" \
+                                                    + s.split(":")[0])
+
+
+                        elif variant.info['SVTYPE'] == 'BND':
+                            
+                            match = re.search(r"([A-Z]*)([\[,\]])([0-9,X,Y]+:[0-9]+)([\[,\]])([A-Z]*)", variant.alt)
+                            
+                            if match.group(1):
+                                # this is either t[p[ or t]p] for ALT
+                                if match.group(2) == "]":
+                                    assert match.group(4) == "]"
+                                    e1=ExonsToLeft(variant.left,transcripts[g1.id],exons)
+                                    e2=ExonsToLeft(variant.right,transcripts[g2.id],exons)
+                                    if len(e1) > 0 and len(e2) > 0 and \
+                                        g1.strand == "+" and g2.strand == "-":
+                                        AnnotateVariant(variant,g1,g2,e1,e2)
+                                        ispotential = True
+
+                                        f = variant.fs[-1]
+                                        s = variant.ss[-1]
+                                        indxs = f.split(":")[1].split(",")
+                                        assert "1" in indxs
+                                        variant.ps.append(f.split(":")[0] \
+                                                        + ":" \
+                                                        + s.split(":")[0])
+                                else:
+                                    assert match.group(4) == "["
+                                    e1=ExonsToLeft(variant.left,transcripts[g1.id],exons)
+                                    e2=ExonsToRight(variant.right,transcripts[g2.id],exons)
+                                    if len(e1) > 0 and len(e2) > 0 and \
+                                        g1.strand == "+" and g2.strand == "+":
+                                        AnnotateVariant(variant,g1,g2,e1,e2)
+                                        ispotential = True
+
+                                        f = variant.fs[-1]
+                                        s = variant.ss[-1]
+                                        indxs = f.split(":")[1].split(",")
+                                        assert "1" in indxs
+                                        variant.ps.append(f.split(":")[0] \
+                                                        + ":" \
+                                                        + s.split(":")[0])
+
+                            else:
+                                # this is either ]p]t or [p[t for ALT
+                                if match.group(2) == "]":
+                                    assert match.group(4) == "]"
+                                    e1=ExonsToRight(variant.left,transcripts[g1.id],exons)
+                                    e2=ExonsToLeft(variant.right,transcripts[g2.id],exons)
+                                    if len(e1) > 0 and len(e2) > 0 and \
+                                        g1.strand == "-" and g2.strand == "-":
+                                        AnnotateVariant(variant,g1,g2,e1,e2)
+                                        ispotential = True
+
+                                        f = variant.fs[-1]
+                                        s = variant.ss[-1]
+                                        indxs = f.split(":")[1].split(",")
+                                        assert "1" in indxs
+                                        variant.ps.append(f.split(":")[0] \
+                                                        + ":" \
+                                                        + s.split(":")[0])
+                                else:
+                                    assert match.group(4) == "["
+                                    e1=ExonsToRight(variant.left,transcripts[g1.id],exons)                       
+                                    e2=ExonsToRight(variant.right,transcripts[g2.id],exons)                           
+                                    if len(e1) > 0 and len(e2) > 0 and \
+                                        g1.strand == "-" and g2.strand == "+":
+                                        AnnotateVariant(variant,g1,g2,e1,e2)
+                                        ispotential = True
+
+                                        f = variant.fs[-1]
+                                        s = variant.ss[-1]
+                                        indxs = f.split(":")[1].split(",")
+                                        assert "1" in indxs
+                                        variant.ps.append(f.split(":")[0] \
+                                                        + ":" \
+                                                        + s.split(":")[0])
+
+                    if ispotential == True:
+                        if (g1.name,g2.name) not in potential_fusions:
+                            potential_fusions[(g1.name,g2.name)] = []
+                        potential_fusions[(g1.name,g2.name)].append(variant)
+                        break
+    
+    for (g1,g2),variants in potential_fusions.items():
+        for variant in variants:
+            output = ["@",g1, g2, variant.info['SVTYPE'], str(variant.left[0]), str(variant.left[1]), str(variant.left[2]), str(variant.right[0]), str(variant.right[1]),str(variant.right[2])]
+            print "\t".join(output)
+    
+            assert len(variant.fs) == len(variant.ss) == len(variant.ps)
+            for f,s,p in zip(variant.fs,variant.ss,variant.ps):
+                output = ["",f,s,p]
+                print "\t".join(output)
+
+if __name__ == "__main__":
+    try:
+        opts, args = getopt(argv[1:], "hd",["help", "debug"])
+    except GetoptError, err:
+        print str(err)
+        print >> stderr, __doc__
+        exit(2) 
+
+    for o, a in opts:
+        if o in ("-h", "--help"):
+            print >> stderr, __doc__
+            exit()
+        elif o in ("-d", "--debug"):
+            debug_flag = True
+        else:
+            assert False, "unhandled option"
+
+    if len(args) != 2:
+        print >> stderr, __doc__
+        exit(3)
+
+    main(args[0], args[1])
