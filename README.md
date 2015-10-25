@@ -62,6 +62,7 @@ Find the best split alignments for reads that carry signatures of SVs.
         -l,--lastz     : the path to the LASTZ (32 bit version) binary [lastz_32]
         -t,--threads   : number of threads to use [1]
         -1,--onlylz    : only use LASTZ. default is to use both BWA and LASTZ
+        -v,--version   : print version of the code and exit
 
     1. reference.fa is the reference sequence in fasta format.
     2. splitters.bam is a indexed BAM file with the clipped reads
