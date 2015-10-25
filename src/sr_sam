@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 """Find the best split alignments for reads that carry signatures of SVs.
+
     usage:
       sr_sam [options] reference.fa [splitters.bam] unmapped.fq.gz
 
@@ -14,6 +15,7 @@
         -l,--lastz     : the path to the LASTZ (32 bit version) binary [lastz_32]
         -t,--threads   : number of threads to use [1]
         -1,--onlylz    : only use LASTZ. default is to use both BWA and LASTZ
+        -v,--version   : print version and exit
 
     1. reference.fa is the reference sequence in fasta format.
     2. splitters.bam is a indexed BAM file with the clipped reads
@@ -63,6 +65,7 @@
 
 from sys import argv, stderr, stdin, exit, stdout
 from getopt import getopt, GetoptError
+from os import path
 
 from sr_sam import *
 
@@ -73,8 +76,11 @@ __email__  = "ratan@virginia.edu"
 debug_flag = False
 
 if __name__ == "__main__":
+  # lets get the version for this script
+    execfile(path.dirname(path.abspath(__file__)) + "/version.py")
+
     try:
-        opts, args = getopt(argv[1:], "hdm:c:l:t:1",["help", "debug", "maxsplits=", "coverage=", "lastz=", "threads=", "onlylz"])
+        opts, args = getopt(argv[1:], "hdm:c:l:t:1v",["help", "debug", "maxsplits=", "coverage=", "lastz=", "threads=", "onlylz", "version"])
     except GetoptError, err:
         print str(err)
         print >> stderr, __doc__
@@ -85,6 +91,7 @@ if __name__ == "__main__":
     lastz = "lastz_32"
     numthreads = 1
     onlylastz = False
+    print_version = False
 
     for o, a in opts:
         if o in ("-h", "--help"):
@@ -102,13 +109,19 @@ if __name__ == "__main__":
             numthreads = int(a)
         elif o in ("-1", "--onlylz"):
             onlylastz  = True
+        elif o in ("-v", "--version"):
+            print_version = True
         else:
             assert False, "unhandled option"
+
+    if print_version:
+        print >> stderr, "sr_sam version \"%s\"" % __version__
+        exit(4)
 
     if len(args) not in [2,3]:
         print >> stderr, __doc__
         exit(3)
-
+   
     if len(args) == 2:
         FindSplitAlignments(maxsplits,coverage,lastz,numthreads,onlylastz,args[0],args[1])
     else:

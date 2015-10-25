@@ -7,6 +7,8 @@ extensions = [
     Extension("combine_alignments", ["combine_alignments.pyx"])
 ]
 
-setup(version='1.0',  \
+execfile('version.py')
+
+setup(version = __version__,  \
       ext_modules = cythonize(extensions),
      )

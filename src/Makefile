@@ -8,6 +8,7 @@ all:
 	cp combine_alignments ../bin/
 	cp align.sh ../bin/
 	cp align_reads_with_lz ../bin/
+	cp version.py ../bin/
 	rm *.c
 	rm *.so
 
