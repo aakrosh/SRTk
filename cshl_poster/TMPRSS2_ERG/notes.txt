@@ -1,0 +1,11 @@
+library(ggbio)
+library(GenomicRanges)
+
+p.ideo <- Ideogram(genome = "hg19")
+p.ideo + xlim(GRanges("chr21", IRanges(38e6, 43e6)))
+
+library(Homo.sapiens) 
+class(Homo.sapiens) 
+data(genesymbol, package = "biovizBase")
+wh <- genesymbol[c("ERG", "TMPRSS2")]
+p.gene = autoplot(Homo.sapiens, which  = wh, gap.geom = "chevron", stat = "gene")

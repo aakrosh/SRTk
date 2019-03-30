@@ -160,6 +160,8 @@ def NextSV(f):
             end = int(var.info['END'])
             var.right = (var.chrom,end+x-1,end+y) 
 
+        var.ts = int(tokens[9].split(":")[1])
+
         yield var
 
 def PrintSV(v):
@@ -304,7 +306,29 @@ def main(gffName, vcfName):
                                                     + f.split(":")[0])
  
                         elif variant.info['SVTYPE'] == 'INV':
-                            raise NotImplementedError()
+                            e1=ExonsToLeft(variant.left,transcripts[g1.id],exons)
+                            e2=ExonsToLeft(variant.right,transcripts[g1.id],exons)
+                            if len(e1) > 0 and len(e2) > 0 and \
+                                g1.strand != g2.strand:
+                                AnnotateVariant(variant,g1,g2,e1,e2)
+                                ispotential = True
+
+                                f = variant.fs[-1]
+                                s = variant.ss[-1]
+
+                                if g1.strand == "+":
+                                    indxs = f.split(":")[1].split(",")
+                                    assert "1" in indxs
+                                    variant.ps.append(f.split(":")[0] \
+                                                    + ":" \
+                                                    + s.split(":")[0])
+                                else:
+                                    indxs = s.split(":")[1].split(",")
+                                    assert "1" in indxs
+                                    variant.ps.append(s.split(":")[0] \
+                                                    + ":" \
+                                                    + f.split(":")[0])
+
                         elif variant.info['SVTYPE'] == 'INS':
                             raise NotImplementedError()
                         elif variant.info['SVTYPE'] == 'CNV': 
@@ -315,9 +339,6 @@ def main(gffName, vcfName):
                             # as far as I understand LUMPY this refers to tandem
                             # duplications of just one kind. I need to revisit
                             # this at some point
-                            # print >> stderr, "here",g1.name,g2.name
-                            # print >> stderr, "\t",g1.chrom,g1.zstart,g1.end
-                            # print >> stderr, "\t",g2.chrom,g2.zstart,g2.end
                             e1=ExonsToRight(variant.left,transcripts[g1.id],exons)
                             e2=ExonsToLeft(variant.right,transcripts[g2.id],exons)
                             if len(e1) > 0 and len(e2) > 0 and \
@@ -424,7 +445,7 @@ def main(gffName, vcfName):
     
     for (g1,g2),variants in potential_fusions.items():
         for variant in variants:
-            output = ["@",g1, g2, variant.info['SVTYPE'], str(variant.left[0]), str(variant.left[1]), str(variant.left[2]), str(variant.right[0]), str(variant.right[1]),str(variant.right[2])]
+            output = [g1, g2, variant.info['SVTYPE'], str(variant.left[0]), str(variant.left[1]), str(variant.left[2]), str(variant.right[0]), str(variant.right[1]),str(variant.right[2]), str(variant.ts)]
             print "\t".join(output)
     
             assert len(variant.fs) == len(variant.ss) == len(variant.ps)

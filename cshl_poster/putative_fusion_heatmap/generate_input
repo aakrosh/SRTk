@@ -1,0 +1,53 @@
+#!/usr/bin/env python
+
+import os
+
+# read the names of the genes
+genes = set()
+with open("names.txt", "r") as f:
+    for line in f:
+        gene1,gene2 = line.strip().split()
+        genes.add((gene1,gene2))
+
+# now go through the fusion files and see which of those samples have these
+# fusions
+files = [f for f in os.listdir('.') if os.path.isfile(f) and f.endswith(".fusions")]
+
+fusions = []
+for filename in files:
+    samplefusions = {}
+    with open(filename,"r") as f:
+        for line in f:
+            g1,g2,support = line.strip().split()
+            if (g1,g2) in genes or (g2,g1) in genes:
+                if (g1,g2) in genes:
+                    if (g1,g2) in samplefusions:
+                        if (int(support) > int(samplefusions[(g1,g2)]))  and \
+                           (int(support) < 100):
+                            samplefusions[(g1,g2)] = support
+                    else:
+                        samplefusions[(g1,g2)] = support
+                else:
+                    if (g2,g1) in samplefusions:
+                        if (int(support) > int(samplefusions[(g2,g1)]))  and \
+                           (int(support) < 100):
+                            samplefusions[(g2,g1)] = support
+                    else:
+                        samplefusions[(g2,g1)] = support
+    fusions.append(samplefusions)
+
+# print header
+output = ["Gene1+Gene2"]
+for indx in xrange(0,len(fusions)):
+    output.append("T%d" % (indx+1))
+print "\t".join(output)
+
+for g1,g2 in genes:
+    output = [g1 + "+" + g2]
+    for smf in fusions:
+        if (g1,g2) in smf:
+            output.append(smf[(g1,g2)])
+        else:
+            output.append("0")
+    print "\t".join(output)
+
